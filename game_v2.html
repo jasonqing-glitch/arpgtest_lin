@@ -167,20 +167,6 @@
 
         .merchant-items {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 15px;
-            overflow-y: auto;
-            flex: 1;
-        }
-
-        .merchant-item {
-            background: rgba(0, 0, 0, 0.5);
-            border: 1px solid #444;
-            padding: 10px;
-            border-radius: 5px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
             cursor: pointer;
             transition: background 0.2s;
         }
@@ -466,20 +452,9 @@
             background: rgba(0, 0, 0, 0.9);
             border: 1px solid #666;
             padding: 10px;
-            border-radius: 5px;
-            color: #fff;
-            pointer-events: none;
-            display: none;
-            z-index: 1000;
-            min-width: 200px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
-        }
-
-        .tooltip-header {
-            font-weight: bold;
-            margin-bottom: 5px;
             border-bottom: 1px solid #444;
             padding-bottom: 5px;
+            z-index: 2005;
         }
 
         .tooltip-stat {
@@ -495,6 +470,44 @@
 
         .stat-worse {
             color: #ff0000;
+        }
+
+        #tutorialPanel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 500px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #00ffff;
+            border-radius: 10px;
+            padding: 30px;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            z-index: 2000;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+            pointer-events: auto;
+        }
+
+        .tutorial-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+            font-size: 20px;
+            color: #fff;
+        }
+
+        .key {
+            background: #333;
+            border: 1px solid #666;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-family: monospace;
+            font-weight: bold;
+            color: #ffff00;
+            box-shadow: 0 2px 0 #000;
         }
     </style>
 </head>
@@ -639,6 +652,8 @@
             </div>
         </div>
 
+
+
         <div id="questPanel">
             <div class="panel-header">
                 <h2>Quest Board</h2>
@@ -662,6 +677,19 @@
         </div>
     </div>
     <div id="itemTooltip"></div>
+    <div id="tutorialPanel">
+        <h2 style=" color: #00ffff; margin-bottom: 20px;">CONTROLS</h2>
+        <div class="tutorial-row"><span class="key">W</span><span class="key">A</span><span class="key">S</span><span
+                class="key">D</span> <span>Move</span></div>
+        <div class="tutorial-row"><span class="key">Space</span> / <span class="key">Click</span>
+            <span>Attack</span>
+        </div>
+        <div class="tutorial-row"><span class="key">E</span> <span>Interact (Portal/NPC/Chest)</span></div>
+        <div class="tutorial-row"><span class="key">1</span>-<span class="key">5</span> <span>Skills</span></div>
+        <div class="tutorial-row"><span class="key">C</span> <span>Character Menu</span></div>
+        <button class="inv-btn" style="margin-top: 20px; font-size: 18px; padding: 10px 30px;"
+            onclick="closeTutorial()">GOT IT!</button>
+    </div>
     <canvas id="gameCanvas"></canvas>
     <div id="gameOver">
         <h2>GAME OVER</h2>
@@ -1059,7 +1087,12 @@
                 });
             }
         }
+        function closeTutorial() {
+            document.getElementById('tutorialPanel').style.display = 'none';
+        }
+
         function update() {
+            if (document.getElementById('tutorialPanel').style.display === 'flex') return;
             if (player.hp <= 0) return;
 
             let dx = 0;
@@ -1317,6 +1350,14 @@
                 ctx.font = '12px Arial';
                 ctx.textAlign = 'center';
                 ctx.fillText(currentMapType === 'town' ? "To Dungeon" : "Next Stage", screenX, screenY - 20);
+
+                // Interaction Hint
+                if (Math.hypot(player.x - portal.x, player.y - portal.y) < 2) {
+                    ctx.fillStyle = '#ffff00';
+                    ctx.font = 'bold 14px Arial';
+                    ctx.fillText("Press E", screenX, screenY - 40);
+                    ctx.fillStyle = '#fff'; // Reset
+                }
             }
 
             // Draw Chests
@@ -1330,6 +1371,14 @@
                     ctx.fillRect(screenX - 10, screenY - 20, 20, 20);
                     ctx.strokeStyle = '#fff';
                     ctx.strokeRect(screenX - 10, screenY - 20, 20, 20);
+
+                    // Interaction Hint
+                    if (Math.hypot(player.x - c.x, player.y - c.y) < 2) {
+                        ctx.fillStyle = '#ffff00';
+                        ctx.font = 'bold 14px Arial';
+                        ctx.fillText("Press E", screenX, screenY - 30);
+                        ctx.fillStyle = '#fff'; // Reset
+                    }
                 }
             });
 
@@ -2117,6 +2166,7 @@
         try {
             console.log("Game Version: Quest System Implemented");
             resetGame();
+            document.getElementById('tutorialPanel').style.display = 'flex';
             animate();
         } catch (e) {
             console.error("Game Init Error:", e);
