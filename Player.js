@@ -254,21 +254,11 @@ class Player {
                 let damage = this.stats.attack * 5;
                 e.hp -= damage;
                 floatingTexts.push({ x: e.x, y: e.y - 1, text: Math.floor(damage), color: '#00ffff', size: 30, life: 60, maxLife: 60 });
-
-                if (Math.random() < 0.3) {
-                    if (spawnItem) {
-                        spawnItem(e.x, e.y);
-                    } else {
-                        items.push({ x: e.x, y: e.y, type: Math.random() < 0.7 ? 0 : 1, life: 1800 });
-                    }
-                }
-
-                this.gainXp(e.level * 20, effects);
-                this.energy = Math.min(this.energy + 5, this.maxEnergy);
-                enemies.splice(i, 1);
+                // We let the main game loop and Enemy.update() handle death, XP, and item drops.
             }
         }
     }
+
 
     shoot(mouseX, mouseY, bullets, canvas) {
         const dx = mouseX - canvas.width / 2;

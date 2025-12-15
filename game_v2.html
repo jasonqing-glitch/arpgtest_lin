@@ -724,6 +724,8 @@
         let currentMapType = 'town'; // 'town' or 'dungeon'
         let npcs = [];
         let decorations = [];
+        let lastDungeonStage = 1; // Saved stage for return portal
+        let returnPortalOpen = false; // Is return portal active?
 
         class NPC {
             constructor(x, y, type, name, color) {
@@ -1043,6 +1045,22 @@
                     bossAttempts++;
                 }
 
+                // Spawn Elite Enemies (5-10 per map)
+                let eliteCount = 5 + Math.floor(Math.random() * 6);
+                for (let i = 0; i < eliteCount; i++) {
+                    let valid = false;
+                    let attempts = 0;
+                    while (!valid && attempts < 100) {
+                        let x = Math.floor(Math.random() * (MAP_SIZE - 2)) + 1;
+                        let y = Math.floor(Math.random() * (MAP_SIZE - 2)) + 1;
+                        if (map[y][x] === 0 && Math.sqrt((x - player.x) ** 2 + (y - player.y) ** 2) > 15) {
+                            enemies.push(new Enemy(x, y, stage + 1, 'elite')); // Elite: Level = Stage + 1
+                            valid = true;
+                        }
+                        attempts++;
+                    }
+                }
+
                 // Spawn Enemies only in Dungeon
                 for (let i = 0; i < ENEMY_COUNT + stage * 5; i++) {
                     let valid = false;
@@ -1223,13 +1241,40 @@
 
                 if (portal.active && Math.sqrt((player.x - portal.x) ** 2 + (player.y - portal.y) ** 2) < 2) {
                     if (currentMapType === 'town') {
-                        currentMapType = 'dungeon';
-                        stage = 1;
+                        if (returnPortalOpen) {
+                            stage = lastDungeonStage; // Return to saved stage
+                            console.log("Returning to saved stage: " + stage);
+                        } else {
+                            currentMapType = 'dungeon';
+                            stage = 1;
+                        }
+                        returnPortalOpen = false; // Consume portal on use (optional, or keep open until new run?)
+                        // Let's keep it open until a new run starts or player dies? 
+                        // Usually return portals close after use or if you start a new run. 
+                        // For now, let's close it on use to prevent abuse or confusion, 
+                        // BUT common ARPG design: keep it open so you can go back and forth until you go deeper.
+                        // User request: "Use scroll -> Portal appears -> Player uses it -> Returns to floor".
+                        // It doesn't specify if it stays or closes. 
+                        // To allow selling and returning, we should probably KEEP it open until we leave town to a NEW dungeon or reset.
+                        // But wait, if I warp to Dungeon Lv 5, I'm now in Dungeon.
+                        // If I use another scroll, I come back.
+                        // So 'close on use' effectively means 'close the path FROM town'.
+                        // Once in dungeon, if I die or restart, it's gone.
+                        // If I walk back to town from dungeon? Wait, there is no walk back.
+                        // So interacting with it puts me in Dungeon.
+                        // I'll keep returnPortalOpen = false for now to be safe, assuming one-way trip back.
+                        // Actually, better: if you return to dungeon, you are in dungeon. The 'return portal' concept is usually 'Town Portal' (Blue) in Diablo.
+                        // It stays open as long as you are in town.
+                        // Let's set it to false on entry to simulate "taking the portal back". 
+                        // If user uses another scroll, a new one opens.
+                        returnPortalOpen = false;
+
+                        currentMapType = 'dungeon'; // Ensure type is set
                     } else {
-                        stage++;
+                        stage++; // Next Level
                     }
                     resetGame(true);
-                    console.log("Portal interaction: Next Stage");
+                    console.log("Portal interaction: Next Stage/Return");
                 }
 
                 // Check for Chests
@@ -1349,7 +1394,13 @@
                 ctx.fillStyle = '#fff';
                 ctx.font = '12px Arial';
                 ctx.textAlign = 'center';
-                ctx.fillText(currentMapType === 'town' ? "To Dungeon" : "Next Stage", screenX, screenY - 20);
+                let portalText = currentMapType === 'town' ? "To Dungeon" : "Next Stage";
+                if (currentMapType === 'town' && returnPortalOpen) {
+                    portalText = `Return to Lv ${lastDungeonStage}`;
+                    ctx.fillStyle = '#00ffff'; // Highlight return portal
+                }
+                ctx.fillText(portalText, screenX, screenY - 20);
+                if (currentMapType === 'town' && returnPortalOpen) ctx.fillStyle = '#fff'; // Reset color
 
                 // Interaction Hint
                 if (Math.hypot(player.x - portal.x, player.y - portal.y) < 2) {
@@ -1540,32 +1591,36 @@
 
             if (type <= 3) {
                 if (Math.random() < 0.2) {
+                    const equip = generateEquipment('weapon', isBossDrop);
                     item = {
                         ...item,
-                        ...generateEquipment('weapon', isBossDrop),
-                        color: '#00ffff', type: 4
+                        ...equip,
+                        color: equip.color, type: 4
                     };
                 } else {
                     item.type = 0; // HP Potion fallback
                     item.color = '#00ff00';
                 }
             } else if (type === 4) {
+                const equip = generateEquipment('weapon', isBossDrop);
                 item = {
                     ...item,
-                    ...generateEquipment('weapon', isBossDrop),
-                    color: '#00ffff'
+                    ...equip,
+                    color: equip.color
                 };
             } else if (type === 5) {
+                const equip = generateEquipment('armor', isBossDrop);
                 item = {
                     ...item,
-                    ...generateEquipment('armor', isBossDrop),
-                    color: '#ff00ff'
+                    ...equip,
+                    color: equip.color
                 };
             } else if (type === 6) {
+                const equip = generateEquipment('accessory', isBossDrop);
                 item = {
                     ...item,
-                    ...generateEquipment('accessory', isBossDrop),
-                    color: '#ffffff'
+                    ...equip,
+                    color: equip.color
                 };
             } else if (type === 7) {
                 item.color = '#ffd700'; // Gold
@@ -1584,31 +1639,53 @@
             let rarity = Math.random();
             if (isBossDrop) rarity += 0.3;
 
-            let quality = 1;
-            if (rarity > 0.95) quality = 3;
-            else if (rarity > 0.7) quality = 2;
+            let quality = 1; // Common
+            let color = '#ffffff';
+            let prefix = 'Common';
+            let statMult = 1;
+
+            if (rarity > 0.98) {
+                quality = 5; // Legendary
+                color = '#ff8800'; // Orange
+                prefix = 'Legendary';
+                statMult = 3.0;
+            } else if (rarity > 0.90) {
+                quality = 4; // Epic
+                color = '#800080'; // Purple
+                prefix = 'Epic';
+                statMult = 2.0;
+            } else if (rarity > 0.75) {
+                quality = 3; // Rare
+                color = '#0000ff'; // Blue
+                prefix = 'Rare';
+                statMult = 1.5;
+            } else if (rarity > 0.45) {
+                quality = 2; // Uncommon
+                color = '#00ff00'; // Green
+                prefix = 'Uncommon';
+                statMult = 1.2;
+            }
 
             let weaponStats = null;
-            let namePrefix = quality === 3 ? 'Legendary' : (quality === 2 ? 'Rare' : 'Common');
-            let itemName = `${namePrefix} ${type.charAt(0).toUpperCase() + type.slice(1)}`;
+            let itemName = `${prefix} ${type.charAt(0).toUpperCase() + type.slice(1)}`;
 
             if (type === 'weapon') {
                 const weaponTypes = Object.keys(player.WEAPONS).filter(k => k !== 'DEFAULT');
                 const weaponKey = weaponTypes[Math.floor(Math.random() * weaponTypes.length)];
                 weaponStats = { ...player.WEAPONS[weaponKey] };
-                itemName = `${namePrefix} ${weaponStats.name}`;
+                itemName = `${prefix} ${weaponStats.name}`;
 
-                weaponStats.damageMult *= (1 + (quality - 1) * 0.2);
-                weaponStats.rate = Math.max(5, weaponStats.rate * (1 - (quality - 1) * 0.1));
+                weaponStats.damageMult *= statMult;
+                weaponStats.rate = Math.max(5, weaponStats.rate * (1 - (quality - 1) * 0.05)); // Slight speed buff for quality
             }
 
             const stats = {
-                attack: type === 'weapon' ? Math.floor(Math.random() * 5 * quality) + 1 : 0,
-                defense: type === 'armor' ? Math.floor(Math.random() * 3 * quality) + 1 : 0,
-                speed: type === 'accessory' ? Math.random() * 0.05 * quality : 0,
-                maxHp: Math.floor(Math.random() * 20 * quality),
-                critRate: Math.random() * 0.02 * quality,
-                critDamage: Math.random() * 0.1 * quality
+                attack: type === 'weapon' ? Math.floor((Math.random() * 5 + 1) * statMult) : 0,
+                defense: type === 'armor' ? Math.floor((Math.random() * 3 + 1) * statMult) : 0,
+                speed: type === 'accessory' ? (Math.random() * 0.05 * quality) : 0, // Speed scales with quality directly
+                maxHp: Math.floor((Math.random() * 20 + 10) * statMult),
+                critRate: Math.random() * 0.01 * quality,
+                critDamage: Math.random() * 0.05 * quality
             };
 
             return {
@@ -1616,7 +1693,8 @@
                 stats,
                 weaponStats,
                 slot: type,
-                quality
+                quality,
+                color
             };
         }
 
@@ -1769,6 +1847,9 @@
 
             if (item.type === 9) { // Return Scroll
                 if (currentMapType === 'dungeon') {
+                    lastDungeonStage = stage;
+                    returnPortalOpen = true; // Open return portal
+
                     currentMapType = 'town';
                     stage = 1;
                     resetGame(true);

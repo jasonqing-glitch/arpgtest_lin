@@ -1,26 +1,48 @@
 class Enemy {
-    constructor(x, y, level, isBoss = false) {
+    constructor(x, y, level, rank = 'normal') {
         this.x = x;
         this.y = y;
         this.level = level;
-        this.isBoss = isBoss;
 
-        // Boss Scaling
-        const hpMult = isBoss ? 10 : 1;
-        const dmgMult = isBoss ? 2 : 1;
+        // Handle legacy boolean argument
+        if (rank === true) rank = 'boss';
+        else if (rank === false || rank === undefined) rank = 'normal';
+        this.rank = rank;
+        this.isBoss = (rank === 'boss'); // Maintain compat
+
+        // Stats Scaling
+        let hpMult = 1;
+        let dmgMult = 1;
+        let defBonus = 0;
+        let speedMult = 1;
+
+        if (this.rank === 'boss') {
+            hpMult = 10;
+            dmgMult = 2;
+            defBonus = 5;
+            speedMult = 0.8;
+            this.attackRate = 40;
+        } else if (this.rank === 'elite') {
+            hpMult = 3;
+            dmgMult = 1.5;
+            defBonus = 2;
+            speedMult = 0.9;
+            this.attackRate = 50;
+        } else {
+            this.attackRate = 60;
+        }
 
         this.hp = (50 + (level * 20)) * hpMult;
         this.maxHp = this.hp;
         this.damage = (3 + (level * 1.5)) * dmgMult;
-        this.defense = level * 1 + (isBoss ? 5 : 0);
-        this.speed = (0.02 + (level * 0.001)) * (isBoss ? 0.8 : 1); // Boss is slightly slower
+        this.defense = level * 1 + defBonus;
+        this.speed = (0.02 + (level * 0.001)) * speedMult;
 
         this.status = {
             burn: 0,
             burnTimer: 0
         };
         this.attackCooldown = 0;
-        this.attackRate = isBoss ? 40 : 60; // Boss attacks faster
     }
 
     update(player, map, bullets, floatingTexts, effects, items, spawnItem, allEnemies) {
@@ -140,12 +162,31 @@ class Enemy {
 
         // Death Logic
         if (this.hp <= 0) {
-            player.gainXp(this.level * (this.isBoss ? 100 : 10), effects);
-            player.energy = Math.min(player.energy + (this.isBoss ? 50 : 5), player.maxEnergy);
+            let xp = this.level * 10;
+            let energy = 5;
+
+            if (this.rank === 'boss') {
+                xp = this.level * 100;
+                energy = 50;
+            } else if (this.rank === 'elite') {
+                xp = this.level * 30;
+                energy = 15;
+            }
+
+            player.gainXp(xp, effects);
+            player.energy = Math.min(player.energy + energy, player.maxEnergy);
+
             if (spawnItem) {
-                if (this.isBoss) {
+                if (this.rank === 'boss') {
                     // Boss drops multiple items, high chance of legendary
                     for (let i = 0; i < 3; i++) spawnItem(this.x + (Math.random() - 0.5) * 2, this.y + (Math.random() - 0.5) * 2, true);
+                } else if (this.rank === 'elite') {
+                    // Elite drops 1 item, higher chance of good loot (handled by spawnItem logic ideally, pass rank?)
+                    // For now, spawnItem just takes position. We might want to pass a 'bonus' flag if spawnItem supports it.
+                    // Assuming spawnItem(x, y, isBoss) - let's reuse the isBoss flag for 'better loot' or add a new param?
+                    // Looking at game_v2.html spawnItem might need update or we just pass true/false.
+                    // Let's pass 'true' for 'better loot' which was 'isBossDrop'.
+                    spawnItem(this.x, this.y, true);
                 } else {
                     spawnItem(this.x, this.y);
                 }
@@ -164,16 +205,27 @@ class Enemy {
     draw(ctx, x, y) {
         const centerX = x;
         const centerY = y + 16;
-        const size = this.isBoss ? 40 : 20;
-        const height = this.isBoss ? 80 : 40;
 
-        // Color based on level
+        let size = 20;
+        let height = 40;
+
+        if (this.rank === 'boss') {
+            size = 40;
+            height = 80;
+        } else if (this.rank === 'elite') {
+            size = 30;
+            height = 60;
+        }
+
+        // Color based on level/rank
         let topColor = '#aaaaaa';
         let sideColor1 = '#888888';
         let sideColor2 = '#666666';
 
-        if (this.isBoss) {
+        if (this.rank === 'boss') {
             topColor = '#440000'; sideColor1 = '#330000'; sideColor2 = '#220000';
+        } else if (this.rank === 'elite') {
+            topColor = '#800080'; sideColor1 = '#660066'; sideColor2 = '#4d004d'; // Purple
         } else if (this.level > 5) {
             topColor = '#ff0000'; sideColor1 = '#cc0000'; sideColor2 = '#990000';
         } else if (this.level > 3) {
